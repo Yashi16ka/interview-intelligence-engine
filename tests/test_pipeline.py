@@ -67,9 +67,12 @@ def test_pipeline_preserves_relevance_order() -> None:
     results = [
         make_result(
             source="test",
-            title="Salesforce Engineering",
+            title="Salesforce SWE Candidate Experience",
             url="https://example.com/weaker",
-            content="Software engineer discussion.",
+            content=(
+                "Salesforce Software Engineer interview "
+                "experience."
+            ),
         ),
         make_result(
             source="test",

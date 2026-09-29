@@ -10,6 +10,9 @@ INTERVIEW_TERMS = {
     "interviewing",
     "assessment",
     "assessments",
+}
+
+STRONG_INTERVIEW_TERMS = {
     "technical screen",
     "technical interview",
     "coding challenge",
@@ -34,6 +37,43 @@ def tokenize(text: str) -> set[str]:
     )
 
 
+def has_contextual_match(
+    text: str,
+    company: str,
+    interview_terms: set[str],
+    window: int = 160,
+) -> bool:
+    text = text.lower()
+    company = company.lower().strip()
+
+    if not company:
+        return False
+
+    company_positions = [
+        match.start()
+        for match in re.finditer(
+            re.escape(company),
+            text,
+        )
+    ]
+
+    for position in company_positions:
+        start = max(0, position - window)
+        end = min(
+            len(text),
+            position + len(company) + window,
+        )
+        context = text[start:end]
+
+        if any(
+            term in context
+            for term in interview_terms
+        ):
+            return True
+
+    return False
+
+
 def score_source(
     result: SourceResult,
     company: str,
@@ -48,8 +88,11 @@ def score_source(
 
     company_normalized = company.lower().strip()
 
-    if company_normalized and company_normalized in combined:
-        score += 5
+    if (
+        company_normalized
+        and company_normalized in combined
+    ):
+        score += 3
         matched_terms.append(company_normalized)
 
     role_tokens = tokenize(role)
@@ -65,26 +108,57 @@ def score_source(
         role_tokens - ignored_role_terms
     )
 
+    combined_tokens = tokenize(combined)
+
     matched_role_tokens = sorted(
         token
         for token in meaningful_role_tokens
-        if token in tokenize(combined)
+        if token in combined_tokens
     )
 
-    score += len(matched_role_tokens) * 2
+    score += len(matched_role_tokens)
     matched_terms.extend(matched_role_tokens)
 
-    for term in sorted(INTERVIEW_TERMS):
-        if term in combined:
-            score += 3
-            matched_terms.append(term)
+    matched_interview_terms = [
+        term
+        for term in sorted(INTERVIEW_TERMS)
+        if term in combined
+    ]
 
-    if company_normalized in title:
+    score += len(matched_interview_terms)
+    matched_terms.extend(matched_interview_terms)
+
+    matched_strong_terms = [
+        term
+        for term in sorted(STRONG_INTERVIEW_TERMS)
+        if term in combined
+    ]
+
+    score += len(matched_strong_terms) * 2
+    matched_terms.extend(matched_strong_terms)
+
+    all_interview_terms = (
+        INTERVIEW_TERMS
+        | STRONG_INTERVIEW_TERMS
+    )
+
+    if has_contextual_match(
+        text=combined,
+        company=company_normalized,
+        interview_terms=all_interview_terms,
+    ):
+        score += 6
+        matched_terms.append("company_interview_context")
+
+    if (
+        company_normalized
+        and company_normalized in title
+    ):
         score += 2
 
     if any(
         term in title
-        for term in INTERVIEW_TERMS
+        for term in all_interview_terms
     ):
         score += 2
 
@@ -99,7 +173,7 @@ def rank_sources(
     results: list[SourceResult],
     company: str,
     role: str,
-    minimum_score: int = 5,
+    minimum_score: int = 8,
 ) -> list[ScoredSource]:
     scored = [
         score_source(
@@ -114,6 +188,7 @@ def rank_sources(
         item
         for item in scored
         if item.score >= minimum_score
+        and "company_interview_context" in item.matched_terms
     ]
 
     return sorted(

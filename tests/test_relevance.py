@@ -98,8 +98,11 @@ def test_rank_sources_orders_highest_score_first() -> None:
     )
 
     weaker = make_result(
-        title="Salesforce Engineering",
-        content="Software engineer discussion.",
+        title="Salesforce Software Engineer Interview",
+        content=(
+            "Salesforce Software Engineer interview "
+            "experience."
+        ),
         url="https://example.com/weak",
     )
 
@@ -115,3 +118,106 @@ def test_rank_sources_orders_highest_score_first() -> None:
     assert len(ranked) == 2
     assert ranked[0].result.url == stronger.url
     assert ranked[0].score > ranked[1].score
+
+
+def test_rewards_company_and_interview_in_same_context() -> None:
+    result = SourceResult(
+        source="discussion",
+        title="Interview experience",
+        url="https://example.com/strong",
+        content=(
+            "My Microsoft Software Engineer interview "
+            "included a technical interview and coding challenge."
+        ),
+    )
+
+    scored = score_source(
+        result=result,
+        company="Microsoft",
+        role="Software Engineer",
+    )
+
+    assert "company_interview_context" in scored.matched_terms
+    assert scored.score >= 8
+
+
+def test_does_not_reward_disconnected_company_and_interview_mentions() -> None:
+    filler = "unrelated engineering discussion " * 20
+
+    result = SourceResult(
+        source="discussion",
+        title="General hiring discussion",
+        url="https://example.com/weak",
+        content=(
+            "We work with Microsoft on security research. "
+            f"{filler}"
+            "Software engineers often prepare for interviews."
+        ),
+    )
+
+    scored = score_source(
+        result=result,
+        company="Microsoft",
+        role="Software Engineer",
+    )
+
+    assert "company_interview_context" not in scored.matched_terms
+
+
+def test_strong_interview_terms_receive_extra_weight() -> None:
+    generic = SourceResult(
+        source="discussion",
+        title="Microsoft hiring",
+        url="https://example.com/generic",
+        content=(
+            "Microsoft Software Engineer interview."
+        ),
+    )
+
+    specific = SourceResult(
+        source="discussion",
+        title="Microsoft hiring",
+        url="https://example.com/specific",
+        content=(
+            "Microsoft Software Engineer interview "
+            "included a coding challenge."
+        ),
+    )
+
+    generic_score = score_source(
+        result=generic,
+        company="Microsoft",
+        role="Software Engineer",
+    ).score
+
+    specific_score = score_source(
+        result=specific,
+        company="Microsoft",
+        role="Software Engineer",
+    ).score
+
+    assert specific_score > generic_score
+
+
+def test_rank_sources_rejects_disconnected_keyword_matches() -> None:
+    filler = "unrelated hiring discussion " * 30
+
+    false_positive = SourceResult(
+        source="discussion",
+        title="General technology hiring",
+        url="https://example.com/false-positive",
+        content=(
+            "Microsoft provides technology services. "
+            f"{filler}"
+            "Software engineer interviews may include "
+            "technical interviews and assessments."
+        ),
+    )
+
+    ranked = rank_sources(
+        results=[false_positive],
+        company="Microsoft",
+        role="Software Engineer Intern",
+    )
+
+    assert ranked == []

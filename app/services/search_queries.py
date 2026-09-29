@@ -25,6 +25,14 @@ def build_interview_queries(
         ),
         SearchQuery(
             purpose="technical_interview",
-            query=f'"{company}" software engineer technical interview',
+            query=f'"{company}" "{role}" technical interview',
+        ),
+        SearchQuery(
+            purpose="role_requirements",
+            query=f'"{company}" "{role}" jobs requirements',
+        ),
+        SearchQuery(
+            purpose="company_engineering",
+            query=f'"{company}" engineering technology',
         ),
     ]

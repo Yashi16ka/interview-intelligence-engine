@@ -1,3 +1,5 @@
+import asyncio
+
 import httpx
 
 from app.models.source import SourceResult
@@ -11,47 +13,89 @@ class HackerNewsCollector(BaseCollector):
     def name(self) -> str:
         return "hackernews"
 
-    async def collect(
+    async def _search(
         self,
-        company: str,
-        role: str,
+        client: httpx.AsyncClient,
+        query: str,
+        tag: str,
     ) -> list[SourceResult]:
-        query = f"{company} {role}"
-
-        async with httpx.AsyncClient(timeout=10.0) as client:
-            response = await client.get(
-                self.BASE_URL,
-                params={
-                    "query": query,
-                    "tags": "story",
-                    "hitsPerPage": 10,
-                },
-            )
-            response.raise_for_status()
+        response = await client.get(
+            self.BASE_URL,
+            params={
+                "query": query,
+                "tags": tag,
+                "hitsPerPage": 10,
+            },
+        )
+        response.raise_for_status()
 
         data = response.json()
-
         results: list[SourceResult] = []
 
         for hit in data.get("hits", []):
-            title = hit.get("title")
             object_id = hit.get("objectID")
 
-            if not title or not object_id:
+            if not object_id:
                 continue
 
-            source_url = (
-                hit.get("url")
-                or f"https://news.ycombinator.com/item?id={object_id}"
-            )
+            if tag == "comment":
+                title = (
+                    hit.get("story_title")
+                    or "Hacker News discussion"
+                )
+                content = (
+                    hit.get("comment_text")
+                    or title
+                )
+                story_id = hit.get("story_id")
+
+                source_url = (
+                    f"https://news.ycombinator.com/item?id={story_id}"
+                    if story_id
+                    else f"https://news.ycombinator.com/item?id={object_id}"
+                )
+            else:
+                title = hit.get("title")
+
+                if not title:
+                    continue
+
+                content = hit.get("story_text") or title
+                source_url = (
+                    hit.get("url")
+                    or f"https://news.ycombinator.com/item?id={object_id}"
+                )
 
             results.append(
                 SourceResult(
                     source=self.name,
                     title=title,
                     url=source_url,
-                    content=title,
+                    content=content,
                 )
             )
 
         return results
+
+    async def collect(
+        self,
+        company: str,
+        role: str,
+    ) -> list[SourceResult]:
+        query = f"{company} {role} interview"
+
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            stories, comments = await asyncio.gather(
+                self._search(
+                    client=client,
+                    query=query,
+                    tag="story",
+                ),
+                self._search(
+                    client=client,
+                    query=query,
+                    tag="comment",
+                ),
+            )
+
+        return stories + comments

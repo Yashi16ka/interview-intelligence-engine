@@ -24,7 +24,7 @@ def process_sources(
     results: list[SourceResult],
     company: str,
     role: str,
-    minimum_score: int = 5,
+    minimum_score: int = 8,
 ) -> ProcessedEvidence:
     raw_count = len(results)
 
