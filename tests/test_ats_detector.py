@@ -34,3 +34,29 @@ def test_rejects_unrecognized_url() -> None:
     )
 
     assert candidate is None
+
+
+def test_detects_ashby_board_url() -> None:
+    candidate = detect_ats_candidate(
+        "https://jobs.ashbyhq.com/example"
+    )
+
+    assert candidate is not None
+    assert candidate.provider == "ashby"
+    assert candidate.slug == "example"
+    assert str(candidate.board_url) == (
+        "https://jobs.ashbyhq.com/example"
+    )
+
+
+def test_detects_individual_ashby_job_url() -> None:
+    candidate = detect_ats_candidate(
+        "https://jobs.ashbyhq.com/example/job-123"
+    )
+
+    assert candidate is not None
+    assert candidate.provider == "ashby"
+    assert candidate.slug == "example"
+    assert str(candidate.board_url) == (
+        "https://jobs.ashbyhq.com/example"
+    )

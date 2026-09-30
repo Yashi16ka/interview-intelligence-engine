@@ -7,8 +7,8 @@ from app.services.role_matching import extract_role_terms, matches_role
 from app.services.search_queries import SearchQuery
 
 
-class LeverDiscoveryProvider(DiscoveryProvider):
-    BASE_URL = "https://api.lever.co/v0/postings"
+class AshbyDiscoveryProvider(DiscoveryProvider):
+    BASE_URL = "https://api.ashbyhq.com/posting-api/job-board"
 
     def __init__(
         self,
@@ -20,7 +20,7 @@ class LeverDiscoveryProvider(DiscoveryProvider):
 
     @property
     def name(self) -> str:
-        return "lever"
+        return "ashby"
 
     async def discover(
         self,
@@ -45,14 +45,21 @@ class LeverDiscoveryProvider(DiscoveryProvider):
         try:
             response = await client.get(
                 f"{self.BASE_URL}/{self.candidate.slug}",
-                params={"mode": "json"},
             )
             response.raise_for_status()
 
-            jobs = response.json()
+            data = response.json()
         finally:
             if owns_client:
                 await client.aclose()
+
+        if not isinstance(data, dict):
+            return []
+
+        jobs = data.get("jobs")
+
+        if not isinstance(jobs, list):
+            return []
 
         results: list[DiscoveredSource] = []
         seen_urls: set[str] = set()
@@ -63,8 +70,11 @@ class LeverDiscoveryProvider(DiscoveryProvider):
             )
 
             for job in jobs:
-                title = job.get("text")
-                url = job.get("hostedUrl")
+                if not isinstance(job, dict):
+                    continue
+
+                title = job.get("title")
+                url = job.get("jobUrl")
 
                 if not title or not url:
                     continue
