@@ -9,6 +9,7 @@ from app.services.discovery_deduplicator import (
 from app.services.discovery_orchestrator import DiscoveryOrchestrator
 from app.services.evidence_builder import build_evidence_items
 from app.services.pipeline import ProcessedPurposeEvidence, process_evidence
+from app.services.research_cache import ResearchCache
 from app.services.search_queries import SearchQuery, build_interview_queries
 
 
@@ -26,9 +27,11 @@ class ResearchEngine:
         self,
         discovery: DiscoveryOrchestrator,
         ats: ATSDiscovery | None = None,
+        cache: ResearchCache | None = None,
     ) -> None:
         self.discovery = discovery
         self.ats = ats
+        self.cache = cache
 
     async def collect_evidence(
         self,
@@ -100,10 +103,26 @@ class ResearchEngine:
         company: str,
         role: str,
     ) -> ProcessedPurposeEvidence:
-        evidence = await self.collect_evidence(
-            company=company,
-            role=role,
-        )
+        evidence: list[EvidenceItem] | None = None
+
+        if self.cache is not None:
+            evidence = await self.cache.get(
+                company=company,
+                role=role,
+            )
+
+        if evidence is None:
+            evidence = await self.collect_evidence(
+                company=company,
+                role=role,
+            )
+
+            if self.cache is not None:
+                await self.cache.set(
+                    company=company,
+                    role=role,
+                    evidence=evidence,
+                )
 
         return process_evidence(
             evidence=evidence,

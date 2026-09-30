@@ -280,3 +280,156 @@ async def test_research_engine_survives_ats_failure() -> None:
         server.shutdown()
         server.server_close()
         thread.join()
+
+
+class InMemoryResearchCache:
+    def __init__(self) -> None:
+        self.entries: dict[
+            tuple[str, str],
+            list[EvidenceItem],
+        ] = {}
+        self.get_calls = 0
+        self.set_calls = 0
+
+    @staticmethod
+    def _key(
+        company: str,
+        role: str,
+    ) -> tuple[str, str]:
+        return (
+            " ".join(company.lower().strip().split()),
+            " ".join(role.lower().strip().split()),
+        )
+
+    async def get(
+        self,
+        company: str,
+        role: str,
+    ) -> list[EvidenceItem] | None:
+        self.get_calls += 1
+        return self.entries.get(
+            self._key(company, role)
+        )
+
+    async def set(
+        self,
+        company: str,
+        role: str,
+        evidence: list[EvidenceItem],
+    ) -> None:
+        self.set_calls += 1
+        self.entries[
+            self._key(company, role)
+        ] = evidence
+
+
+class CountingDiscoveryProvider(FakeDiscoveryProvider):
+    def __init__(self, url: str) -> None:
+        super().__init__(url)
+        self.calls = 0
+
+    async def discover(
+        self,
+        queries: list[SearchQuery],
+    ) -> list[DiscoveredSource]:
+        self.calls += 1
+        return await super().discover(queries)
+
+
+@pytest.mark.anyio
+async def test_research_engine_caches_collected_evidence() -> None:
+    server = HTTPServer(
+        ("127.0.0.1", 0),
+        PageHandler,
+    )
+
+    thread = threading.Thread(
+        target=server.serve_forever,
+        daemon=True,
+    )
+    thread.start()
+
+    try:
+        host, port = server.server_address
+        url = f"http://{host}:{port}/interview"
+
+        provider = CountingDiscoveryProvider(url)
+        discovery = DiscoveryOrchestrator(
+            providers=[provider]
+        )
+        cache = InMemoryResearchCache()
+
+        engine = ResearchEngine(
+            discovery=discovery,
+            cache=cache,
+        )
+
+        result = await engine.research(
+            company="Example",
+            role="Software Engineer",
+        )
+
+        assert result.stats.raw_count == 1
+        assert provider.calls == 1
+        assert cache.get_calls == 1
+        assert cache.set_calls == 1
+        assert len(cache.entries) == 1
+    finally:
+        server.shutdown()
+        server.server_close()
+        thread.join()
+
+
+@pytest.mark.anyio
+async def test_research_engine_reuses_cached_evidence() -> None:
+    server = HTTPServer(
+        ("127.0.0.1", 0),
+        PageHandler,
+    )
+
+    thread = threading.Thread(
+        target=server.serve_forever,
+        daemon=True,
+    )
+    thread.start()
+
+    try:
+        host, port = server.server_address
+        url = f"http://{host}:{port}/interview"
+
+        provider = CountingDiscoveryProvider(url)
+        discovery = DiscoveryOrchestrator(
+            providers=[provider]
+        )
+        cache = InMemoryResearchCache()
+
+        engine = ResearchEngine(
+            discovery=discovery,
+            cache=cache,
+        )
+
+        first = await engine.research(
+            company="Example",
+            role="Software Engineer",
+        )
+
+        second = await engine.research(
+            company="  example ",
+            role="software   engineer",
+        )
+
+        assert first.stats.raw_count == 1
+        assert second.stats.raw_count == 1
+
+        assert provider.calls == 1
+        assert cache.get_calls == 2
+        assert cache.set_calls == 1
+
+        assert (
+            second.evidence[0].evidence.result.content
+            == first.evidence[0].evidence.result.content
+        )
+    finally:
+        server.shutdown()
+        server.server_close()
+        thread.join()
