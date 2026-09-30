@@ -88,6 +88,16 @@ async def test_research_engine_end_to_end() -> None:
             discovery=discovery,
         )
 
+        collected_evidence = await engine.collect_evidence(
+            company="Example",
+            role="Software Engineer",
+        )
+
+        assert len(collected_evidence) == 1
+        assert collected_evidence[0].purpose == "interview_experience"
+        assert collected_evidence[0].provider == "fake"
+        assert collected_evidence[0].result.source == "browser"
+
         result = await engine.research(
             company="Example",
             role="Software Engineer",
@@ -102,8 +112,10 @@ async def test_research_engine_end_to_end() -> None:
 
         evidence = result.evidence[0]
 
-        assert evidence.result.source == "browser"
-        assert "coding challenge" in evidence.result.content
+        assert evidence.evidence.result.source == "browser"
+        assert "coding challenge" in evidence.evidence.result.content
+        assert evidence.evidence.purpose == "interview_experience"
+        assert evidence.evidence.provider == "fake"
         assert evidence.score >= 5
 
     finally:

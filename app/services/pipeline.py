@@ -1,8 +1,10 @@
 from dataclasses import dataclass
 
+from app.models.evidence import EvidenceItem
 from app.models.source import SourceResult
 from app.services.deduplicator import deduplicate_sources
 from app.services.normalizer import normalize_sources
+from app.services.purpose_relevance import ScoredEvidence, rank_evidence
 from app.services.relevance import ScoredSource, rank_sources
 
 
@@ -47,6 +49,36 @@ def process_sources(
             raw_count=raw_count,
             normalized_count=normalized_count,
             unique_count=unique_count,
+            relevant_count=len(ranked),
+        ),
+    )
+
+
+@dataclass
+class ProcessedPurposeEvidence:
+    evidence: list[ScoredEvidence]
+    stats: ProcessingStats
+
+
+def process_evidence(
+    evidence: list[EvidenceItem],
+    company: str,
+    role: str,
+) -> ProcessedPurposeEvidence:
+    raw_count = len(evidence)
+
+    ranked = rank_evidence(
+        evidence=evidence,
+        company=company,
+        role=role,
+    )
+
+    return ProcessedPurposeEvidence(
+        evidence=ranked,
+        stats=ProcessingStats(
+            raw_count=raw_count,
+            normalized_count=raw_count,
+            unique_count=raw_count,
             relevant_count=len(ranked),
         ),
     )

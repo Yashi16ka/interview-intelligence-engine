@@ -2,6 +2,7 @@ import asyncio
 
 from playwright.async_api import async_playwright
 
+from app.models.browser import BrowserFetchResult
 from app.models.source import SourceResult
 from app.services.collectors.base import BaseCollector
 
@@ -23,7 +24,7 @@ class BrowserPageCollector(BaseCollector):
         self,
         page,
         url: str,
-    ) -> SourceResult | None:
+    ) -> BrowserFetchResult | None:
         try:
             await page.goto(
                 url,
@@ -37,23 +38,24 @@ class BrowserPageCollector(BaseCollector):
             if not title or not content.strip():
                 return None
 
-            return SourceResult(
+            result = SourceResult(
                 source=self.name,
                 title=title.strip(),
                 url=page.url,
                 content=content.strip(),
             )
 
+            return BrowserFetchResult(
+                requested_url=url,
+                result=result,
+            )
+
         except Exception:
             return None
 
-    async def collect(
+    async def collect_with_metadata(
         self,
-        company: str,
-        role: str,
-    ) -> list[SourceResult]:
-        del company, role
-
+    ) -> list[BrowserFetchResult]:
         if not self.urls:
             return []
 
@@ -80,10 +82,24 @@ class BrowserPageCollector(BaseCollector):
                 outcomes = await asyncio.gather(*tasks)
 
                 return [
-                    result
-                    for result in outcomes
-                    if result is not None
+                    outcome
+                    for outcome in outcomes
+                    if outcome is not None
                 ]
 
             finally:
                 await browser.close()
+
+    async def collect(
+        self,
+        company: str,
+        role: str,
+    ) -> list[SourceResult]:
+        del company, role
+
+        fetched = await self.collect_with_metadata()
+
+        return [
+            item.result
+            for item in fetched
+        ]
