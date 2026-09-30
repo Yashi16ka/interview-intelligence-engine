@@ -17,3 +17,10 @@ class DiscoveryError(BaseModel):
 class DiscoveryResults(BaseModel):
     sources: list[DiscoveredSource]
     errors: list[DiscoveryError]
+
+
+class DiscoveredTarget(BaseModel):
+    title: str
+    url: HttpUrl
+    purposes: list[str]
+    providers: list[str]

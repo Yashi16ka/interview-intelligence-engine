@@ -4,7 +4,7 @@ from app.services.discovery_deduplicator import (
 )
 
 
-def test_deduplicates_same_url_across_providers() -> None:
+def test_merges_purposes_for_same_url() -> None:
     sources = [
         DiscoveredSource(
             title="First result",
@@ -23,10 +23,17 @@ def test_deduplicates_same_url_across_providers() -> None:
     result = deduplicate_discovered_sources(sources)
 
     assert len(result) == 1
-    assert result[0].provider == "provider_a"
+    assert result[0].purposes == [
+        "interview_experience",
+        "interview_questions",
+    ]
+    assert result[0].providers == [
+        "provider_a",
+        "provider_b",
+    ]
 
 
-def test_deduplicates_tracking_variants() -> None:
+def test_merges_tracking_variants() -> None:
     sources = [
         DiscoveredSource(
             title="Original",
@@ -40,7 +47,7 @@ def test_deduplicates_tracking_variants() -> None:
                 "https://example.com/interview"
                 "?utm_source=search"
             ),
-            purpose="interview_experience",
+            purpose="technical_interview",
             provider="provider_b",
         ),
     ]
@@ -48,6 +55,41 @@ def test_deduplicates_tracking_variants() -> None:
     result = deduplicate_discovered_sources(sources)
 
     assert len(result) == 1
+    assert result[0].purposes == [
+        "interview_experience",
+        "technical_interview",
+    ]
+    assert result[0].providers == [
+        "provider_a",
+        "provider_b",
+    ]
+
+
+def test_does_not_duplicate_same_purpose_or_provider() -> None:
+    sources = [
+        DiscoveredSource(
+            title="First",
+            url="https://example.com/interview",
+            purpose="interview_experience",
+            provider="provider_a",
+        ),
+        DiscoveredSource(
+            title="Second",
+            url="https://example.com/interview",
+            purpose="interview_experience",
+            provider="provider_a",
+        ),
+    ]
+
+    result = deduplicate_discovered_sources(sources)
+
+    assert len(result) == 1
+    assert result[0].purposes == [
+        "interview_experience",
+    ]
+    assert result[0].providers == [
+        "provider_a",
+    ]
 
 
 def test_preserves_unique_sources() -> None:
@@ -69,3 +111,9 @@ def test_preserves_unique_sources() -> None:
     result = deduplicate_discovered_sources(sources)
 
     assert len(result) == 2
+    assert result[0].purposes == [
+        "interview_experience",
+    ]
+    assert result[1].purposes == [
+        "role_requirements",
+    ]

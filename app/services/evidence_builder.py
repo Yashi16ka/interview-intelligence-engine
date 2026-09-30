@@ -1,16 +1,16 @@
 from app.models.browser import BrowserFetchResult
-from app.models.discovery import DiscoveredSource
+from app.models.discovery import DiscoveredTarget
 from app.models.evidence import EvidenceItem
 from app.services.deduplicator import canonicalize_url
 
 
 def build_evidence_items(
-    discovered: list[DiscoveredSource],
+    discovered: list[DiscoveredTarget],
     fetched: list[BrowserFetchResult],
 ) -> list[EvidenceItem]:
     discovery_by_url = {
-        canonicalize_url(str(source.url)): source
-        for source in discovered
+        canonicalize_url(str(target.url)): target
+        for target in discovered
     }
 
     evidence: list[EvidenceItem] = []
@@ -20,17 +20,20 @@ def build_evidence_items(
             str(item.requested_url)
         )
 
-        source = discovery_by_url.get(requested_url)
+        target = discovery_by_url.get(requested_url)
 
-        if source is None:
+        if target is None:
             continue
 
-        evidence.append(
-            EvidenceItem(
-                result=item.result,
-                purpose=source.purpose,
-                provider=source.provider,
+        provider = ",".join(target.providers)
+
+        for purpose in target.purposes:
+            evidence.append(
+                EvidenceItem(
+                    result=item.result,
+                    purpose=purpose,
+                    provider=provider,
+                )
             )
-        )
 
     return evidence

@@ -1,16 +1,16 @@
 from app.models.browser import BrowserFetchResult
-from app.models.discovery import DiscoveredSource
+from app.models.discovery import DiscoveredTarget
 from app.models.source import SourceResult
 from app.services.evidence_builder import build_evidence_items
 
 
 def test_build_evidence_items_preserves_purpose() -> None:
     discovered = [
-        DiscoveredSource(
+        DiscoveredTarget(
             title="Software Engineer Job",
             url="https://example.com/job",
-            purpose="role_requirements",
-            provider="company_careers",
+            purposes=["role_requirements"],
+            providers=["company_careers"],
         )
     ]
 
@@ -38,11 +38,11 @@ def test_build_evidence_items_preserves_purpose() -> None:
 
 def test_build_evidence_items_uses_requested_url_after_redirect() -> None:
     discovered = [
-        DiscoveredSource(
+        DiscoveredTarget(
             title="Interview Experience",
             url="https://example.com/interview",
-            purpose="interview_experience",
-            provider="discussion",
+            purposes=["interview_experience"],
+            providers=["discussion"],
         )
     ]
 
@@ -68,3 +68,43 @@ def test_build_evidence_items_uses_requested_url_after_redirect() -> None:
     assert str(evidence[0].result.url) == (
         "https://careers.example.com/interview"
     )
+
+
+def test_build_evidence_items_expands_multiple_purposes() -> None:
+    target = DiscoveredTarget(
+        title="Shared interview page",
+        url="https://example.com/interview",
+        purposes=[
+            "interview_experience",
+            "technical_interview",
+        ],
+        providers=[
+            "provider_a",
+            "provider_b",
+        ],
+    )
+
+    fetched = BrowserFetchResult(
+        requested_url="https://example.com/interview",
+        result=SourceResult(
+            source="browser",
+            title="Interview",
+            url="https://example.com/interview",
+            content="Technical interview and coding challenge.",
+        ),
+    )
+
+    evidence = build_evidence_items(
+        discovered=[target],
+        fetched=[fetched],
+    )
+
+    assert len(evidence) == 2
+
+    assert {
+        item.purpose
+        for item in evidence
+    } == {
+        "interview_experience",
+        "technical_interview",
+    }
