@@ -4,6 +4,7 @@ from typing import Protocol
 
 from app.models.ats import ATSCandidate
 from app.models.discovery import DiscoveredSource
+from app.models.evidence import EvidenceItem
 from app.services.search_queries import SearchQuery
 
 
@@ -18,6 +19,12 @@ class ATSProvider(Protocol):
         self,
         queries: list[SearchQuery],
     ) -> list[DiscoveredSource]:
+        ...
+
+    async def collect_evidence(
+        self,
+        queries: list[SearchQuery],
+    ) -> list[EvidenceItem]:
         ...
 
 
@@ -36,11 +43,10 @@ class ATSOrchestrator:
         self.board_discoverers = board_discoverers
         self.provider_factory = provider_factory
 
-    async def discover(
+    async def _discover_candidates(
         self,
         company: str,
-        queries: list[SearchQuery],
-    ) -> list[DiscoveredSource]:
+    ) -> list[ATSCandidate]:
         board_results = await asyncio.gather(
             *[
                 discover(company)
@@ -49,11 +55,20 @@ class ATSOrchestrator:
             return_exceptions=True,
         )
 
-        candidates = [
+        return [
             result
             for result in board_results
             if isinstance(result, ATSCandidate)
         ]
+
+    async def discover(
+        self,
+        company: str,
+        queries: list[SearchQuery],
+    ) -> list[DiscoveredSource]:
+        candidates = await self._discover_candidates(
+            company=company,
+        )
 
         if not candidates:
             return []
@@ -77,6 +92,38 @@ class ATSOrchestrator:
             discovered.extend(result)
 
         return discovered
+
+    async def collect_evidence(
+        self,
+        company: str,
+        queries: list[SearchQuery],
+    ) -> list[EvidenceItem]:
+        candidates = await self._discover_candidates(
+            company=company,
+        )
+
+        if not candidates:
+            return []
+
+        provider_results = await asyncio.gather(
+            *[
+                self.provider_factory(
+                    candidate
+                ).collect_evidence(queries)
+                for candidate in candidates
+            ],
+            return_exceptions=True,
+        )
+
+        evidence: list[EvidenceItem] = []
+
+        for result in provider_results:
+            if isinstance(result, Exception):
+                continue
+
+            evidence.extend(result)
+
+        return evidence
 
 
 def build_ats_orchestrator() -> ATSOrchestrator:

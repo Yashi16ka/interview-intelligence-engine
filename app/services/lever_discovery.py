@@ -2,6 +2,8 @@ import httpx
 
 from app.models.ats import ATSCandidate
 from app.models.discovery import DiscoveredSource
+from app.models.evidence import EvidenceItem
+from app.models.source import SourceResult
 from app.services.discovery import DiscoveryProvider
 from app.services.role_matching import extract_role_terms, matches_role
 from app.services.search_queries import SearchQuery
@@ -22,19 +24,9 @@ class LeverDiscoveryProvider(DiscoveryProvider):
     def name(self) -> str:
         return "lever"
 
-    async def discover(
+    async def _fetch_jobs(
         self,
-        queries: list[SearchQuery],
-    ) -> list[DiscoveredSource]:
-        role_queries = [
-            query
-            for query in queries
-            if query.purpose == "role_requirements"
-        ]
-
-        if not role_queries:
-            return []
-
+    ) -> list[dict]:
         owns_client = self.client is None
 
         client = self.client or httpx.AsyncClient(
@@ -49,10 +41,34 @@ class LeverDiscoveryProvider(DiscoveryProvider):
             )
             response.raise_for_status()
 
-            jobs = response.json()
+            data = response.json()
         finally:
             if owns_client:
                 await client.aclose()
+
+        if not isinstance(data, list):
+            return []
+
+        return [
+            job
+            for job in data
+            if isinstance(job, dict)
+        ]
+
+    async def discover(
+        self,
+        queries: list[SearchQuery],
+    ) -> list[DiscoveredSource]:
+        role_queries = [
+            query
+            for query in queries
+            if query.purpose == "role_requirements"
+        ]
+
+        if not role_queries:
+            return []
+
+        jobs = await self._fetch_jobs()
 
         results: list[DiscoveredSource] = []
         seen_urls: set[str] = set()
@@ -90,3 +106,60 @@ class LeverDiscoveryProvider(DiscoveryProvider):
                 )
 
         return results
+
+    async def collect_evidence(
+        self,
+        queries: list[SearchQuery],
+    ) -> list[EvidenceItem]:
+        role_queries = [
+            query
+            for query in queries
+            if query.purpose == "role_requirements"
+        ]
+
+        if not role_queries:
+            return []
+
+        jobs = await self._fetch_jobs()
+
+        evidence: list[EvidenceItem] = []
+        seen_urls: set[str] = set()
+
+        for query in role_queries:
+            role_terms = extract_role_terms(
+                query.query
+            )
+
+            for job in jobs:
+                title = job.get("text")
+                url = job.get("hostedUrl")
+                content = job.get("descriptionPlain")
+
+                if not title or not url or not content:
+                    continue
+
+                if not matches_role(
+                    title=title,
+                    role_terms=role_terms,
+                ):
+                    continue
+
+                if url in seen_urls:
+                    continue
+
+                seen_urls.add(url)
+
+                evidence.append(
+                    EvidenceItem(
+                        result=SourceResult(
+                            source=self.name,
+                            title=title,
+                            url=url,
+                            content=content,
+                        ),
+                        purpose=query.purpose,
+                        provider=self.name,
+                    )
+                )
+
+        return evidence

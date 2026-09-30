@@ -2,6 +2,8 @@ import pytest
 
 from app.models.ats import ATSCandidate
 from app.models.discovery import DiscoveredSource
+from app.models.evidence import EvidenceItem
+from app.models.source import SourceResult
 from app.services.ats_orchestrator import ATSOrchestrator
 from app.services.search_queries import SearchQuery
 
@@ -43,6 +45,28 @@ class FakeProvider:
             DiscoveredSource(
                 title="Software Engineer",
                 url=f"{self.candidate.board_url}/job-123",
+                purpose="role_requirements",
+                provider=self.candidate.provider,
+            )
+        ]
+
+    async def collect_evidence(
+        self,
+        queries: list[SearchQuery],
+    ) -> list[EvidenceItem]:
+        return [
+            EvidenceItem(
+                result=SourceResult(
+                    source=self.candidate.provider,
+                    title="Software Engineer",
+                    url=(
+                        f"{self.candidate.board_url}/job-123"
+                    ),
+                    content=(
+                        "Software Engineer requirements include "
+                        "Python, APIs, and distributed systems."
+                    ),
+                ),
                 purpose="role_requirements",
                 provider=self.candidate.provider,
             )
@@ -135,3 +159,37 @@ def test_builds_default_ats_orchestrator() -> None:
     orchestrator = build_ats_orchestrator()
 
     assert len(orchestrator.board_discoverers) == 2
+
+
+@pytest.mark.anyio
+async def test_collects_evidence_from_detected_ats() -> None:
+    orchestrator = ATSOrchestrator(
+        board_discoverers=[
+            fake_lever_board,
+            fake_ashby_board,
+        ],
+        provider_factory=fake_provider_factory,
+    )
+
+    evidence = await orchestrator.collect_evidence(
+        company="Ashby Company",
+        queries=[
+            SearchQuery(
+                purpose="role_requirements",
+                query=(
+                    '"Ashby Company" '
+                    '"Software Engineer" jobs requirements'
+                ),
+            )
+        ],
+    )
+
+    assert len(evidence) == 1
+
+    item = evidence[0]
+
+    assert item.provider == "ashby"
+    assert item.purpose == "role_requirements"
+    assert item.result.source == "ashby"
+    assert item.result.title == "Software Engineer"
+    assert "distributed systems" in item.result.content

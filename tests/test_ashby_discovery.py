@@ -101,3 +101,83 @@ async def test_ignores_non_role_queries() -> None:
 
     assert results == []
     assert requests_made == 0
+
+
+@pytest.mark.anyio
+async def test_collects_ashby_job_evidence_from_api_content() -> None:
+    requests_made = 0
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        nonlocal requests_made
+        requests_made += 1
+
+        return httpx.Response(
+            200,
+            json={
+                "jobs": [
+                    {
+                        "title": "Software Engineer",
+                        "jobUrl": (
+                            "https://jobs.ashbyhq.com/"
+                            "acme/job-123"
+                        ),
+                        "descriptionPlain": (
+                            "Acme is hiring a Software Engineer. "
+                            "Requirements include Python, APIs, "
+                            "distributed systems, and PostgreSQL."
+                        ),
+                    },
+                    {
+                        "title": "Product Designer",
+                        "jobUrl": (
+                            "https://jobs.ashbyhq.com/"
+                            "acme/job-456"
+                        ),
+                        "descriptionPlain": (
+                            "Design product experiences."
+                        ),
+                    },
+                ]
+            },
+        )
+
+    candidate = ATSCandidate(
+        provider="ashby",
+        board_url="https://jobs.ashbyhq.com/acme",
+        slug="acme",
+    )
+
+    async with httpx.AsyncClient(
+        transport=httpx.MockTransport(handler)
+    ) as client:
+        provider = AshbyDiscoveryProvider(
+            candidate=candidate,
+            client=client,
+        )
+
+        evidence = await provider.collect_evidence(
+            queries=[
+                SearchQuery(
+                    purpose="role_requirements",
+                    query=(
+                        '"Acme" "Software Engineer" '
+                        "jobs requirements"
+                    ),
+                )
+            ]
+        )
+
+    assert requests_made == 1
+    assert len(evidence) == 1
+
+    item = evidence[0]
+
+    assert item.purpose == "role_requirements"
+    assert item.provider == "ashby"
+    assert item.result.source == "ashby"
+    assert item.result.title == "Software Engineer"
+    assert str(item.result.url) == (
+        "https://jobs.ashbyhq.com/acme/job-123"
+    )
+    assert "distributed systems" in item.result.content
+    assert "PostgreSQL" in item.result.content
