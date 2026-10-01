@@ -126,3 +126,172 @@ def test_role_requirements_rejects_company_role_without_hiring_context() -> None
     )
 
     assert ranked == []
+
+
+def test_interview_experience_keeps_first_person_account() -> None:
+    evidence = make_evidence(
+        purpose="interview_experience",
+        title="That time when I failed the Microsoft interview",
+        content=(
+            "I interviewed at Microsoft for a Software Engineer role. "
+            "My interview included a coding round, and I struggled "
+            "with one of the technical questions."
+        ),
+        url="https://example.com/microsoft-experience",
+    )
+
+    ranked = rank_evidence(
+        evidence=[evidence],
+        company="Microsoft",
+        role="Software Engineer Intern",
+    )
+
+    assert len(ranked) == 1
+
+
+def test_interview_questions_rejects_incidental_interview_mentions() -> None:
+    evidence = make_evidence(
+        purpose="interview_questions",
+        title="Ask HN: A human nature thought experiment",
+        content=(
+            "This is a discussion about human behavior and Microsoft. "
+            "Elsewhere, someone mentions preparing for a software "
+            "interview. The discussion is about workplace behavior "
+            "rather than the interview process."
+        ),
+        url="https://example.com/thought-experiment",
+    )
+
+    ranked = rank_evidence(
+        evidence=[evidence],
+        company="Microsoft",
+        role="Software Engineer Intern",
+    )
+
+    assert ranked == []
+
+
+def test_company_engineering_rejects_reverse_engineering_company_product() -> None:
+    evidence = make_evidence(
+        purpose="company_engineering",
+        title="Reverse engineering Microsoft's dev container CLI",
+        content=(
+            "I spent the weekend reverse engineering Microsoft's "
+            "dev container CLI and documenting how the protocol works."
+        ),
+        url="https://example.com/reverse-engineering",
+    )
+
+    ranked = rank_evidence(
+        evidence=[evidence],
+        company="Microsoft",
+        role="Software Engineer Intern",
+    )
+
+    assert ranked == []
+
+
+def test_company_engineering_keeps_company_engineering_practices() -> None:
+    evidence = make_evidence(
+        purpose="company_engineering",
+        title="Microsoft Engineering",
+        content=(
+            "Microsoft engineering teams describe how they design "
+            "platform architecture, infrastructure, and distributed "
+            "systems for production services."
+        ),
+        url="https://example.com/microsoft-engineering",
+    )
+
+    ranked = rank_evidence(
+        evidence=[evidence],
+        company="Microsoft",
+        role="Software Engineer Intern",
+    )
+
+    assert len(ranked) == 1
+
+
+def test_interview_questions_rejects_explicitly_negated_question() -> None:
+    evidence = make_evidence(
+        purpose="interview_questions",
+        title="Ask HN: A human nature thought experiment",
+        content=(
+            "This is not a high school math problem, or a Microsoft "
+            "interview question, it's a human nature problem."
+        ),
+        url="https://example.com/human-nature",
+    )
+
+    ranked = rank_evidence(
+        evidence=[evidence],
+        company="Microsoft",
+        role="Software Engineer Intern",
+    )
+
+    assert ranked == []
+
+
+def test_interview_questions_keeps_reported_company_question() -> None:
+    evidence = make_evidence(
+        purpose="interview_questions",
+        title="A classic puzzle",
+        content=(
+            "Years ago, Microsoft apparently used to ask this puzzle "
+            "as an interview question. Here is the problem."
+        ),
+        url="https://example.com/classic-puzzle",
+    )
+
+    ranked = rank_evidence(
+        evidence=[evidence],
+        company="Microsoft",
+        role="Software Engineer Intern",
+    )
+
+    assert len(ranked) == 1
+
+
+def test_interview_experience_rejects_question_collection() -> None:
+    evidence = make_evidence(
+        purpose="interview_experience",
+        title="Microsoft Interview Riddle Questions",
+        content=(
+            "Microsoft interviews frequently incorporate riddle-style "
+            "questions. What kind of interview questions will they ask? "
+            "Let's see what Microsoft asked before in this article."
+        ),
+        url="https://example.com/riddle-questions",
+    )
+
+    ranked = rank_evidence(
+        evidence=[evidence],
+        company="Microsoft",
+        role="Software Engineer Intern",
+    )
+
+    assert ranked == []
+
+
+def test_interview_experience_rejects_question_title_with_related_experience_link() -> None:
+    evidence = make_evidence(
+        purpose="interview_experience",
+        title="Microsoft Interview Riddle Questions",
+        content=(
+            "Microsoft interviews frequently incorporate riddle-style "
+            "questions to assess reasoning. What kind of interview "
+            "questions will they ask? Let's see what Microsoft asked. "
+            "RELATED Java Interview Questions. Rebirth of Microsoft? "
+            "A crazy interview experience. What should Microsoft do "
+            "after Steve Ballmer steps down?"
+        ),
+        url="https://example.com/riddle-questions-related-links",
+    )
+
+    ranked = rank_evidence(
+        evidence=[evidence],
+        company="Microsoft",
+        role="Software Engineer Intern",
+    )
+
+    assert ranked == []

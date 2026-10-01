@@ -18,8 +18,8 @@ class PageHandler(BaseHTTPRequestHandler):
             "<html>"
             "<head><title>Example Interview</title></head>"
             "<body>"
-            "Example Software Engineer technical interview "
-            "included a coding challenge and system design."
+            "I interviewed at Example for a Software Engineer role. "
+            "My interview included a coding challenge and system design."
             "</body>"
             "</html>"
         ).encode()

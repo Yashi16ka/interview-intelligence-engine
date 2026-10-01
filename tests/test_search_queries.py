@@ -67,3 +67,21 @@ def test_strips_input_whitespace() -> None:
 
     assert '"Stripe"' in queries[0].query
     assert '"Backend Engineer"' in queries[0].query
+
+
+def test_interview_queries_preserve_structured_context() -> None:
+    queries = build_interview_queries(
+        company=" Microsoft ",
+        role=" Software Engineer Intern ",
+    )
+
+    assert len(queries) == 5
+
+    assert all(
+        query.company == "Microsoft"
+        for query in queries
+    )
+    assert all(
+        query.role == "Software Engineer Intern"
+        for query in queries
+    )
