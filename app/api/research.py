@@ -1,13 +1,21 @@
 from typing import Annotated
 
+import httpx
 from fastapi import APIRouter, Depends
 
-from app.api.dependencies import get_research_engine
+from app.api.dependencies import (
+    get_intelligence_synthesizer,
+    get_research_engine,
+)
+from app.models.intelligence import InterviewIntelligence
 from app.models.research import (
     ResearchEvidenceResponse,
     ResearchRequest,
     ResearchResponse,
     ResearchStatsResponse,
+)
+from app.services.intelligence_synthesizer import (
+    IntelligenceSynthesizer,
 )
 from app.services.research_engine import ResearchEngine
 
@@ -28,11 +36,27 @@ async def research_interview(
         ResearchEngine,
         Depends(get_research_engine),
     ],
+    synthesizer: Annotated[
+        IntelligenceSynthesizer,
+        Depends(get_intelligence_synthesizer),
+    ],
 ) -> ResearchResponse:
     result = await engine.research(
         company=request.company,
         role=request.role,
     )
+
+    status = "completed"
+
+    try:
+        intelligence = await synthesizer.synthesize(
+            company=request.company,
+            role=request.role,
+            evidence=result.evidence,
+        )
+    except httpx.HTTPError:
+        intelligence = InterviewIntelligence()
+        status = "partial"
 
     evidence = [
         ResearchEvidenceResponse(
@@ -50,7 +74,7 @@ async def research_interview(
     return ResearchResponse(
         company=request.company,
         role=request.role,
-        status="completed",
+        status=status,
         stats=ResearchStatsResponse(
             raw_count=result.stats.raw_count,
             normalized_count=(
@@ -62,4 +86,5 @@ async def research_interview(
             ),
         ),
         evidence=evidence,
+        intelligence=intelligence,
     )

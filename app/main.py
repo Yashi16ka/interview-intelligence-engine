@@ -2,9 +2,17 @@ import os
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
+import httpx
 from fastapi import FastAPI
 
 from app.api.research import router as research_router
+from app.services.gemini_synthesizer import GeminiSynthesizer
+from app.services.intelligence_synthesizer import (
+    IntelligenceSynthesizer,
+)
+from app.services.unavailable_intelligence_synthesizer import (
+    UnavailableIntelligenceSynthesizer,
+)
 from app.services.postgres_research_cache import (
     PostgresResearchCache,
 )
@@ -21,12 +29,14 @@ DEFAULT_DATABASE_URL = (
 
 def create_app(
     research_engine: ResearchEngine | None = None,
+    intelligence_synthesizer: IntelligenceSynthesizer | None = None,
 ) -> FastAPI:
     @asynccontextmanager
     async def lifespan(
         app: FastAPI,
     ) -> AsyncIterator[None]:
         cache: PostgresResearchCache | None = None
+        gemini_client: httpx.AsyncClient | None = None
 
         if research_engine is None:
             database_url = os.getenv(
@@ -47,9 +57,35 @@ def create_app(
         else:
             app.state.research_engine = research_engine
 
+        if intelligence_synthesizer is not None:
+            app.state.intelligence_synthesizer = (
+                intelligence_synthesizer
+            )
+        else:
+            api_key = os.getenv("GEMINI_API_KEY")
+
+            if not api_key:
+                app.state.intelligence_synthesizer = (
+                    UnavailableIntelligenceSynthesizer()
+                )
+            else:
+                gemini_client = httpx.AsyncClient(
+                    timeout=30.0,
+                )
+
+                app.state.intelligence_synthesizer = (
+                    GeminiSynthesizer(
+                        api_key=api_key,
+                        client=gemini_client,
+                    )
+                )
+
         try:
             yield
         finally:
+            if gemini_client is not None:
+                await gemini_client.aclose()
+
             if cache is not None:
                 await cache.close()
 

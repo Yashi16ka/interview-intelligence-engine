@@ -1,5 +1,7 @@
 from pydantic import BaseModel, Field, HttpUrl
 
+from app.models.intelligence import InterviewIntelligence
+
 
 class ResearchRequest(BaseModel):
     company: str = Field(
@@ -37,3 +39,4 @@ class ResearchResponse(BaseModel):
     status: str
     stats: ResearchStatsResponse
     evidence: list[ResearchEvidenceResponse]
+    intelligence: InterviewIntelligence
