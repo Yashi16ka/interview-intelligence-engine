@@ -91,13 +91,14 @@ A key design decision is that ATS job descriptions do **not** need to be reopene
 
 ## Tech Stack
 
+**Frontend:** React, Vite
 **Backend:** Python, FastAPI, Pydantic
 **Concurrency:** asyncio
 **HTTP:** HTTPX
 **Browser Automation:** Playwright
 **Database:** PostgreSQL, asyncpg
 **AI Synthesis:** Gemini
-**Testing:** pytest
+**Testing:** pytest, Oxlint
 
 ## Engineering Decisions
 
@@ -170,6 +171,16 @@ createdb interview_intelligence
 
 uvicorn app.main:app --reload
 ```
+
+In a second terminal, start the React interface:
+
+```bash
+cd frontend
+npm install
+npm run dev
+```
+
+Open localhost:5173 in your browser. The frontend sends research requests to the FastAPI service running at localhost:8000.
 
 By default, the application connects to `postgresql://localhost/interview_intelligence`. `DATABASE_URL` can override this connection. Without `GEMINI_API_KEY`, the service can still start and retrieve evidence, but synthesis is unavailable and research responses can return with `partial` status.
 
