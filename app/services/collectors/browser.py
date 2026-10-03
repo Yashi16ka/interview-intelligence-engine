@@ -67,9 +67,18 @@ class BrowserPageCollector(BaseCollector):
         self,
         urls: list[str],
         timeout_ms: int = 10_000,
+        max_concurrency: int = 5,
     ) -> None:
+        if max_concurrency < 1:
+            raise ValueError(
+                "max_concurrency must be at least 1"
+            )
+
         self.urls = urls
         self.timeout_ms = timeout_ms
+        self._semaphore = asyncio.Semaphore(
+            max_concurrency
+        )
 
     @property
     def name(self) -> str:
@@ -120,6 +129,17 @@ class BrowserPageCollector(BaseCollector):
         except Exception:
             return None
 
+    async def _collect_page_limited(
+        self,
+        page,
+        url: str,
+    ) -> BrowserFetchResult | None:
+        async with self._semaphore:
+            return await self._collect_page(
+                page,
+                url,
+            )
+
     async def collect_with_metadata(
         self,
     ) -> list[BrowserFetchResult]:
@@ -138,7 +158,10 @@ class BrowserPageCollector(BaseCollector):
                 ]
 
                 tasks = [
-                    self._collect_page(page, url)
+                    self._collect_page_limited(
+                        page,
+                        url,
+                    )
                     for page, url in zip(
                         pages,
                         self.urls,

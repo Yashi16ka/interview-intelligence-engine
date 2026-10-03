@@ -1,3 +1,5 @@
+import asyncio
+
 import pytest
 
 from app.services.collectors.browser import BrowserPageCollector
@@ -145,3 +147,53 @@ async def test_browser_collector_rejects_http_error_response() -> None:
     )
 
     assert fetched is None
+
+@pytest.mark.anyio
+async def test_browser_collector_limits_concurrent_pages() -> None:
+    collector = BrowserPageCollector(
+        urls=[],
+        max_concurrency=2,
+    )
+
+    active = 0
+    peak_active = 0
+
+    async def fake_collect_page(
+        page,
+        url: str,
+    ):
+        nonlocal active, peak_active
+        del page, url
+
+        active += 1
+        peak_active = max(peak_active, active)
+
+        await asyncio.sleep(0.01)
+
+        active -= 1
+        return None
+
+    collector._collect_page = fake_collect_page
+
+    await asyncio.gather(
+        *[
+            collector._collect_page_limited(
+                object(),
+                f"https://example.com/{index}",
+            )
+            for index in range(6)
+        ]
+    )
+
+    assert peak_active == 2
+
+
+def test_browser_collector_rejects_invalid_max_concurrency() -> None:
+    with pytest.raises(
+        ValueError,
+        match="max_concurrency must be at least 1",
+    ):
+        BrowserPageCollector(
+            urls=[],
+            max_concurrency=0,
+        )
