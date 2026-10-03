@@ -80,6 +80,18 @@ class HackerNewsDiscoveryProvider(DiscoveryProvider):
             if not object_id or not title:
                 continue
 
+            story_text = hit.get("story_text")
+
+            if query.company:
+                if not story_text:
+                    continue
+
+                if (
+                    query.company.casefold()
+                    not in story_text.casefold()
+                ):
+                    continue
+
             url = hit.get("url")
 
             if not url:

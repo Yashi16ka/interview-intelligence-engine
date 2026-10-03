@@ -295,3 +295,89 @@ def test_interview_experience_rejects_question_title_with_related_experience_lin
     )
 
     assert ranked == []
+
+
+def test_company_engineering_rejects_company_name_used_as_ordinary_word() -> None:
+    evidence = make_evidence(
+        purpose="company_engineering",
+        title=(
+            "HN: good interdisciplinary MS/PhD programs "
+            "for tech/culture?"
+        ),
+        content=(
+            "I'm looking for programs that integrate cultural "
+            "issues with engineering and technology."
+        ),
+        url="https://example.com/interdisciplinary",
+    )
+
+    ranked = rank_evidence(
+        evidence=[evidence],
+        company="Integrate",
+        role="Software Engineer",
+    )
+
+    assert ranked == []
+
+
+def test_company_engineering_keeps_ambiguous_name_with_entity_context() -> None:
+    evidence = make_evidence(
+        purpose="company_engineering",
+        title="Engineering architecture discussion",
+        content=(
+            "Engineers at Integrate describe how their team "
+            "builds platform architecture and production systems."
+        ),
+        url="https://example.com/integrate-engineering",
+    )
+
+    ranked = rank_evidence(
+        evidence=[evidence],
+        company="Integrate",
+        role="Software Engineer",
+    )
+
+    assert len(ranked) == 1
+    assert ranked[0].evidence.purpose == "company_engineering"
+
+
+def test_interview_experience_rejects_company_name_used_as_ordinary_word() -> None:
+    evidence = make_evidence(
+        purpose="interview_experience",
+        title="Just paid the May server bill for Tech Interview Experience",
+        content=(
+            "This site collects interview experiences from candidates. "
+            "Job portals could integrate this into their site to help "
+            "people prepare for interviews."
+        ),
+        url="https://example.com/tech-interview-experience",
+    )
+
+    ranked = rank_evidence(
+        evidence=[evidence],
+        company="Integrate",
+        role="Software Engineer",
+    )
+
+    assert ranked == []
+
+
+def test_interview_experience_keeps_ambiguous_name_with_entity_context() -> None:
+    evidence = make_evidence(
+        purpose="interview_experience",
+        title="My software engineering interview experience",
+        content=(
+            "I interviewed at Integrate for a Software Engineer role. "
+            "My interview included a coding round and technical questions."
+        ),
+        url="https://example.com/integrate-interview",
+    )
+
+    ranked = rank_evidence(
+        evidence=[evidence],
+        company="Integrate",
+        role="Software Engineer",
+    )
+
+    assert len(ranked) == 1
+    assert ranked[0].evidence.purpose == "interview_experience"

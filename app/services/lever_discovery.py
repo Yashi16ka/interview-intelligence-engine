@@ -5,7 +5,7 @@ from app.models.discovery import DiscoveredSource
 from app.models.evidence import EvidenceItem
 from app.models.source import SourceResult
 from app.services.discovery import DiscoveryProvider
-from app.services.role_matching import extract_role_terms, matches_role
+from app.services.role_matching import matches_role_query
 from app.services.search_queries import SearchQuery
 
 
@@ -74,10 +74,6 @@ class LeverDiscoveryProvider(DiscoveryProvider):
         seen_urls: set[str] = set()
 
         for query in role_queries:
-            role_terms = extract_role_terms(
-                query.query
-            )
-
             for job in jobs:
                 title = job.get("text")
                 url = job.get("hostedUrl")
@@ -85,9 +81,9 @@ class LeverDiscoveryProvider(DiscoveryProvider):
                 if not title or not url:
                     continue
 
-                if not matches_role(
+                if not matches_role_query(
                     title=title,
-                    role_terms=role_terms,
+                    role=query.role or query.query,
                 ):
                     continue
 
@@ -126,10 +122,6 @@ class LeverDiscoveryProvider(DiscoveryProvider):
         seen_urls: set[str] = set()
 
         for query in role_queries:
-            role_terms = extract_role_terms(
-                query.query
-            )
-
             for job in jobs:
                 title = job.get("text")
                 url = job.get("hostedUrl")
@@ -138,9 +130,9 @@ class LeverDiscoveryProvider(DiscoveryProvider):
                 if not title or not url or not content:
                     continue
 
-                if not matches_role(
+                if not matches_role_query(
                     title=title,
-                    role_terms=role_terms,
+                    role=query.role or query.query,
                 ):
                     continue
 

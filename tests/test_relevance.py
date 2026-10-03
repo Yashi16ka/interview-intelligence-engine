@@ -221,3 +221,44 @@ def test_rank_sources_rejects_disconnected_keyword_matches() -> None:
     )
 
     assert ranked == []
+
+
+def test_does_not_create_company_context_from_ordinary_word_usage() -> None:
+    result = SourceResult(
+        source="discussion",
+        title="Tech Interview Experience",
+        url="https://example.com/tech-interview-experience",
+        content=(
+            "This site collects interview experiences from candidates. "
+            "Job portals could integrate this into their site to help "
+            "people prepare for interviews."
+        ),
+    )
+
+    scored = score_source(
+        result=result,
+        company="Integrate",
+        role="Software Engineer",
+    )
+
+    assert "company_interview_context" not in scored.matched_terms
+
+
+def test_keeps_company_context_for_ambiguous_name_used_as_entity() -> None:
+    result = SourceResult(
+        source="discussion",
+        title="Software engineering interview experience",
+        url="https://example.com/integrate-interview",
+        content=(
+            "I interviewed at Integrate for a Software Engineer role. "
+            "My interview included a coding round and technical questions."
+        ),
+    )
+
+    scored = score_source(
+        result=result,
+        company="Integrate",
+        role="Software Engineer",
+    )
+
+    assert "company_interview_context" in scored.matched_terms

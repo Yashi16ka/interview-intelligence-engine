@@ -107,6 +107,36 @@ def get_company_contexts(
     return contexts
 
 
+def has_company_entity_context(
+    text: str,
+    company: str,
+) -> bool:
+    text = text.lower()
+    company_name = company.lower().strip()
+
+    if not company_name:
+        return False
+
+    escaped_company = re.escape(company_name)
+
+    patterns = [
+        rf"\bat\s+{escaped_company}\b",
+        rf"\bfrom\s+{escaped_company}\b",
+        rf"\bfor\s+{escaped_company}\b",
+        rf"\b{escaped_company}['’]s\b",
+        (
+            rf"\b{escaped_company}\s+"
+            rf"(?:engineering|engineers|team|teams|employees|"
+            rf"developers|hiring|company|platform|infrastructure)\b"
+        ),
+    ]
+
+    return any(
+        re.search(pattern, text)
+        for pattern in patterns
+    )
+
+
 def has_company_term_context(
     text: str,
     company: str,
@@ -187,6 +217,12 @@ def score_company_engineering(
     )
 
     if re.search(reverse_engineering_pattern, combined):
+        return None
+
+    if not has_company_entity_context(
+        text=combined,
+        company=company,
+    ):
         return None
 
     if not has_company_term_context(

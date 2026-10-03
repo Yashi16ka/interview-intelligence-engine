@@ -1,6 +1,7 @@
 from app.services.role_matching import (
     extract_role_terms,
     matches_role,
+    matches_role_query,
 )
 
 
@@ -57,4 +58,50 @@ def test_rejects_unrelated_internship() -> None:
     assert not matches_role(
         "Product Intern",
         terms,
+    )
+
+
+def test_plain_role_rejects_explicit_senior_title() -> None:
+    assert matches_role_query(
+        title="Full Stack Software Engineer",
+        role="Software Engineer",
+    )
+
+    assert not matches_role_query(
+        title="Senior Full Stack Software Engineer",
+        role="Software Engineer",
+    )
+
+
+def test_intern_role_requires_intern_title() -> None:
+    assert matches_role_query(
+        title="Software Engineer Intern",
+        role="Software Engineer Intern",
+    )
+
+    assert not matches_role_query(
+        title="Senior Software Engineer",
+        role="Software Engineer Intern",
+    )
+
+    assert not matches_role_query(
+        title="Software Engineer",
+        role="Software Engineer Intern",
+    )
+
+
+def test_senior_role_requires_senior_title() -> None:
+    assert matches_role_query(
+        title="Senior Software Engineer",
+        role="Senior Software Engineer",
+    )
+
+    assert not matches_role_query(
+        title="Software Engineer",
+        role="Senior Software Engineer",
+    )
+
+    assert not matches_role_query(
+        title="Software Engineer Intern",
+        role="Senior Software Engineer",
     )

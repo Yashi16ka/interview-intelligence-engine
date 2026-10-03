@@ -219,3 +219,64 @@ async def test_hackernews_discovery_skips_role_requirements() -> None:
 
     assert results == []
     assert request_count == 0
+
+
+@pytest.mark.anyio
+async def test_hackernews_discovery_filters_hits_without_company_signal(
+) -> None:
+    async def handler(
+        request: httpx.Request,
+    ) -> httpx.Response:
+        return httpx.Response(
+            200,
+            json={
+                "hits": [
+                    {
+                        "objectID": "100",
+                        "title": (
+                            "How to Integrate Infosec and DevOps "
+                            "Using Chaos Engineering"
+                        ),
+                        "story_text": None,
+                        "url": "https://example.com/false-positive",
+                    },
+                    {
+                        "objectID": "200",
+                        "title": "Integrate engineering architecture",
+                        "story_text": (
+                            "Engineers at Integrate discuss "
+                            "their platform architecture."
+                        ),
+                        "url": "https://example.com/integrate",
+                    },
+                ]
+            },
+        )
+
+    transport = httpx.MockTransport(handler)
+
+    async with httpx.AsyncClient(
+        transport=transport,
+    ) as client:
+        provider = HackerNewsDiscoveryProvider(
+            client=client,
+        )
+
+        results = await provider.discover(
+            [
+                SearchQuery(
+                    purpose="company_engineering",
+                    query='"Integrate" engineering technology',
+                    company="Integrate",
+                    role="Software Engineer",
+                )
+            ]
+        )
+
+    assert len(results) == 1
+    assert results[0].title == (
+        "Integrate engineering architecture"
+    )
+    assert str(results[0].url) == (
+        "https://example.com/integrate"
+    )

@@ -164,3 +164,67 @@ async def test_collects_lever_job_evidence_from_api_content() -> None:
     )
     assert "distributed systems" in item.result.content
     assert "PostgreSQL" in item.result.content
+
+
+@pytest.mark.anyio
+async def test_lever_filters_senior_job_for_unspecified_level() -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(
+            200,
+            json=[
+                {
+                    "text": "Full Stack Software Engineer",
+                    "hostedUrl": (
+                        "https://jobs.lever.co/example/standard"
+                    ),
+                    "descriptionPlain": (
+                        "Example is hiring a Full Stack "
+                        "Software Engineer."
+                    ),
+                },
+                {
+                    "text": "Senior Full Stack Software Engineer",
+                    "hostedUrl": (
+                        "https://jobs.lever.co/example/senior"
+                    ),
+                    "descriptionPlain": (
+                        "Example is hiring a Senior Full Stack "
+                        "Software Engineer."
+                    ),
+                },
+            ],
+        )
+
+    candidate = ATSCandidate(
+        provider="lever",
+        board_url="https://jobs.lever.co/example",
+        slug="example",
+    )
+
+    async with httpx.AsyncClient(
+        transport=httpx.MockTransport(handler)
+    ) as client:
+        provider = LeverDiscoveryProvider(
+            candidate=candidate,
+            client=client,
+        )
+
+        evidence = await provider.collect_evidence(
+            queries=[
+                SearchQuery(
+                    purpose="role_requirements",
+                    query=(
+                        '"Example" "Software Engineer" '
+                        "jobs requirements"
+                    ),
+                    company="Example",
+                    role="Software Engineer",
+                )
+            ]
+        )
+
+    assert len(evidence) == 1
+    assert (
+        evidence[0].result.title
+        == "Full Stack Software Engineer"
+    )

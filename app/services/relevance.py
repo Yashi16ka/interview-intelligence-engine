@@ -58,6 +58,21 @@ def has_contextual_match(
     ]
 
     for position in company_positions:
+        prefix = text[
+            max(0, position - 20):position
+        ]
+
+        ordinary_word_pattern = (
+            r"(?:\bto|\bcan|\bcould|\bshould|\bwould|"
+            r"\bwill|\bmay|\bmight|\bmust)\s+$"
+        )
+
+        if re.search(
+            ordinary_word_pattern,
+            prefix,
+        ):
+            continue
+
         start = max(0, position - window)
         end = min(
             len(text),
