@@ -2,7 +2,7 @@
 
 A concurrent multi-source research engine for evidence-grounded technical interview preparation.
 
-Instead of relying on a single source or sending every page through the same retrieval path, the engine discovers information across multiple source types, retrieves each source using the appropriate mechanism, normalizes and deduplicates the evidence, and ranks it by research purpose.
+Instead of relying on a single source or sending every page through the same retrieval path, the engine discovers information across multiple source types, retrieves each source using the appropriate mechanism, normalizes and ranks the evidence by research purpose, and synthesizes it into grounded interview topics, practice questions, preparation priorities, and a study plan with source citations.
 
 ## Why I Built It
 
@@ -30,42 +30,64 @@ Research Query Builder
       |                           |
       v                           v
 General Discovery            ATS Discovery
-      |                     Lever / Ashby
-      v                           |
-Browser Retrieval                 v
-   Playwright              Structured API Content
+  Hacker News                Lever / Ashby
       |                           |
-      +-------------+-------------+
+      v                           v
+Browser Retrieval         Structured API Content
+   Playwright                      |
+      |                            |
+      +-------------+--------------+
                     |
                     v
-             Evidence Items
+              Evidence Items
                     |
                     v
-       Normalize + Deduplicate
+           PostgreSQL Cache
                     |
                     v
-        Purpose-Aware Ranking
+        Normalize + Deduplicate
                     |
                     v
-          Research Evidence
+          Purpose-Aware Ranking
+                    |
+                    v
+             Ranked Evidence
+                    |
+                    v
+       Evidence-Grounded Gemini
+               Synthesis
+                    |
+                    v
+        Interview Intelligence
+     Topics / Questions / Plan
+                    |
+                    v
+        Resolved Source URLs
 ```
 
 A key design decision is that ATS job descriptions do **not** need to be reopened in a browser. Lever and Ashby already expose useful structured job content, so the engine converts that API content directly into evidence while reserving Playwright for sources that actually require browser retrieval.
 
 ## Current Capabilities
 
-- FastAPI service foundation with health and research endpoints
+- FastAPI service with health and research endpoints
 - Company- and role-agnostic research query generation
 - Concurrent source orchestration with `asyncio`
-- Failure isolation across independent collectors and discovery providers
-- Headless browser retrieval with Playwright
-- URL and title normalization and deduplication
-- Purpose-aware evidence ranking for interview experiences, interview questions, technical interviews, role requirements, and company engineering context
+- Hacker News discovery through its public API
 - Automatic public ATS discovery for Lever and Ashby
-- Role-aware filtering of ATS job postings
-- Direct extraction of job-description evidence from ATS APIs
-- Evidence provenance preserved across discovery and retrieval
-- 101 automated tests across the research pipeline
+- Direct job-description evidence extraction from ATS APIs
+- Role- and seniority-aware ATS job filtering
+- Headless browser retrieval with Playwright
+- Bounded browser concurrency
+- Detection of HTTP error, access-denied, and verification pages
+- URL, title, and evidence normalization and deduplication
+- Purpose-aware evidence ranking across five research purposes
+- PostgreSQL-backed evidence caching
+- Evidence-grounded Gemini synthesis with structured output
+- Source citations resolved from retrieved evidence IDs
+- Retry handling for transient synthesis failures
+- Graceful partial responses when synthesis is unavailable or invalid
+- Failure isolation across independent retrieval paths
+- 165 automated tests across the pipeline
 
 ## Tech Stack
 
@@ -73,6 +95,8 @@ A key design decision is that ATS job descriptions do **not** need to be reopene
 **Concurrency:** asyncio
 **HTTP:** HTTPX
 **Browser Automation:** Playwright
+**Database:** PostgreSQL, asyncpg
+**AI Synthesis:** Gemini
 **Testing:** pytest
 
 ## Engineering Decisions
@@ -87,6 +111,10 @@ Independent discovery and collection operations run concurrently rather than seq
 
 This measures the concurrency architecture under controlled I/O conditions and is not presented as production latency.
 
+### Bounded browser concurrency
+
+Concurrency improves I/O throughput, but unbounded browser fan-out can consume unnecessary resources. Browser retrieval therefore limits simultaneous navigation and extraction operations.
+
 ### Failure isolation
 
 Source failures are isolated so one unavailable provider does not invalidate successful evidence from other providers.
@@ -95,28 +123,29 @@ Source failures are isolated so one unavailable provider does not invalidate suc
 
 A job description and an interview experience should not be evaluated using identical relevance rules. Evidence is scored according to its research purpose rather than through one generic keyword filter.
 
+### Evidence-grounded synthesis
+
+Gemini receives ranked evidence produced by the retrieval pipeline rather than only a company and role. The model references evidence IDs in structured output, and those IDs are resolved back to the original source URLs before the API response is returned.
+
+### Graceful synthesis degradation
+
+If synthesis is unavailable, malformed, or references invalid evidence, the research endpoint preserves successful retrieval results and returns a `partial` response instead of failing the entire request.
+
 ## Testing
 
-The current test suite contains **101 passing tests** covering concurrent orchestration, failure isolation, browser collection, discovery and deduplication, evidence provenance, relevance scoring, ATS discovery and role matching, direct ATS evidence extraction, and ResearchEngine integration.
+The current test suite contains **165 passing tests** covering concurrent orchestration, failure isolation, browser retrieval and bounded concurrency, discovery and deduplication, evidence provenance, purpose-aware relevance, ATS discovery and role matching, PostgreSQL caching, ResearchEngine integration, Gemini synthesis, evidence resolution, and graceful handling of invalid synthesis responses.
 
 Run the suite with:
 
 ```bash
-pytest -v
+pytest -q
 ```
 
 ## Project Status
 
-This project is actively under development. Current work focuses on the research and evidence pipeline.
+The core end-to-end pipeline is implemented: discovery, source-specific retrieval, evidence processing, PostgreSQL caching, purpose-aware ranking, and evidence-grounded interview-intelligence synthesis.
 
-Planned next stages include:
-
-- PostgreSQL persistence and caching
-- evidence aggregation and interview-intelligence synthesis
-- generated interview questions and preparation plans
-- evidence-backed citations in generated output
-- retry, backoff, rate-limiting, and observability improvements
-- API and demo polish
+The implementation emphasizes a tested, inspectable pipeline in which retrieved evidence remains traceable through ranking and synthesis.
 
 ## Running Locally
 
@@ -130,15 +159,26 @@ source .venv/bin/activate
 pip install -r requirements.txt
 playwright install chromium
 
+# Create the local PostgreSQL database
+createdb interview_intelligence
+
+# Optional if using a non-default PostgreSQL connection
+# export DATABASE_URL="postgresql://localhost/interview_intelligence"
+
+# Optional: enables Gemini synthesis
+# export GEMINI_API_KEY="your-api-key"
+
 uvicorn app.main:app --reload
 ```
+
+By default, the application connects to `postgresql://localhost/interview_intelligence`. `DATABASE_URL` can override this connection. Without `GEMINI_API_KEY`, the service can still start and retrieve evidence, but synthesis is unavailable and research responses can return with `partial` status.
 
 Run the tests with:
 
 ```bash
-pytest -v
+pytest -q
 ```
 
 ## Development Approach
 
-The project is being built incrementally with tests around each architectural layer. The commit history reflects the progression from concurrent source collection to evidence processing, purpose-aware relevance, automatic ATS discovery, and direct structured evidence retrieval.
+The project was built incrementally with tests around each architectural layer. The commit history reflects the progression from concurrent source collection to evidence processing, purpose-aware relevance, automatic ATS discovery, structured ATS retrieval, PostgreSQL caching, evidence-grounded synthesis, and retrieval and synthesis failure handling.
