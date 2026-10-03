@@ -4,6 +4,7 @@ from contextlib import asynccontextmanager
 
 import httpx
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.research import router as research_router
 from app.services.gemini_synthesizer import GeminiSynthesizer
@@ -93,6 +94,13 @@ def create_app(
         title="Interview Intelligence Engine",
         version="0.1.0",
         lifespan=lifespan,
+    )
+
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=["http://localhost:5173"],
+        allow_methods=["*"],
+        allow_headers=["*"],
     )
 
     @app.get("/health")
