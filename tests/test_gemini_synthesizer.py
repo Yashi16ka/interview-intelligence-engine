@@ -6,6 +6,7 @@ import pytest
 from app.models.evidence import EvidenceItem
 from app.models.source import SourceResult
 from app.services.gemini_synthesizer import GeminiSynthesizer
+from app.services.synthesis_errors import SynthesisResponseError
 from app.services.purpose_relevance import ScoredEvidence
 
 
@@ -173,8 +174,8 @@ async def test_gemini_synthesizer_rejects_unknown_evidence_id() -> None:
         )
 
         with pytest.raises(
-            ValueError,
-            match="Unknown evidence ID: E99",
+            SynthesisResponseError,
+            match="Gemini returned invalid synthesis output.",
         ):
             await synthesizer.synthesize(
                 company="Example",
@@ -290,3 +291,63 @@ async def test_gemini_synthesizer_does_not_retry_400() -> None:
             )
 
     assert attempts == 1
+
+
+@pytest.mark.anyio
+async def test_gemini_synthesizer_rejects_missing_candidate_content() -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(
+            200,
+            json={"candidates": []},
+        )
+
+    async with httpx.AsyncClient(
+        transport=httpx.MockTransport(handler)
+    ) as client:
+        synthesizer = GeminiSynthesizer(
+            api_key="test-key",
+            client=client,
+        )
+
+        with pytest.raises(SynthesisResponseError):
+            await synthesizer.synthesize(
+                company="Example",
+                role="Software Engineer",
+                evidence=make_evidence(),
+            )
+
+
+@pytest.mark.anyio
+async def test_gemini_synthesizer_rejects_malformed_json() -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(
+            200,
+            json={
+                "candidates": [
+                    {
+                        "content": {
+                            "parts": [
+                                {
+                                    "text": "not valid json",
+                                }
+                            ]
+                        }
+                    }
+                ]
+            },
+        )
+
+    async with httpx.AsyncClient(
+        transport=httpx.MockTransport(handler)
+    ) as client:
+        synthesizer = GeminiSynthesizer(
+            api_key="test-key",
+            client=client,
+        )
+
+        with pytest.raises(SynthesisResponseError):
+            await synthesizer.synthesize(
+                company="Example",
+                role="Software Engineer",
+                evidence=make_evidence(),
+            )

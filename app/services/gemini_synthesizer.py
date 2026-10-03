@@ -2,6 +2,7 @@ import asyncio
 import json
 
 import httpx
+from pydantic import ValidationError
 
 from app.models.intelligence import InterviewIntelligence
 from app.models.synthesis import SynthesisResponse
@@ -9,6 +10,7 @@ from app.services.gemini_schema import flatten_json_schema
 from app.services.intelligence_resolver import resolve_synthesis_response
 from app.services.purpose_relevance import ScoredEvidence
 from app.services.synthesis_prompt import build_synthesis_prompt
+from app.services.synthesis_errors import SynthesisResponseError
 
 
 class GeminiSynthesizer:
@@ -86,16 +88,27 @@ class GeminiSynthesizer:
 
         response.raise_for_status()
 
-        payload = response.json()
+        try:
+            payload = response.json()
+            text = payload["candidates"][0]["content"]["parts"][0]["text"]
+            synthesis_data = json.loads(text)
 
-        text = payload["candidates"][0]["content"]["parts"][0]["text"]
-        synthesis_data = json.loads(text)
+            synthesis = SynthesisResponse.model_validate(
+                synthesis_data
+            )
 
-        synthesis = SynthesisResponse.model_validate(
-            synthesis_data
-        )
-
-        return resolve_synthesis_response(
-            synthesis=synthesis,
-            evidence=evidence,
-        )
+            return resolve_synthesis_response(
+                synthesis=synthesis,
+                evidence=evidence,
+            )
+        except (
+            KeyError,
+            IndexError,
+            TypeError,
+            json.JSONDecodeError,
+            ValidationError,
+            ValueError,
+        ) as exc:
+            raise SynthesisResponseError(
+                "Gemini returned invalid synthesis output."
+            ) from exc

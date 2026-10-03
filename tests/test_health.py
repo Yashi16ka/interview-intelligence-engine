@@ -10,6 +10,7 @@ from app.services.pipeline import (
     ProcessingStats,
 )
 from app.services.purpose_relevance import ScoredEvidence
+from app.services.synthesis_errors import SynthesisResponseError
 
 
 class FakeResearchEngine:
@@ -228,6 +229,47 @@ def test_app_starts_without_gemini_api_key(
     assert research_response.status_code == 200
 
     payload = research_response.json()
+
+    assert payload["status"] == "partial"
+    assert len(payload["evidence"]) == 1
+    assert payload["intelligence"] == {
+        "key_topics": [],
+        "likely_questions": [],
+        "preparation_priorities": [],
+        "study_plan": [],
+    }
+
+
+class InvalidResponseSynthesizer:
+    async def synthesize(
+        self,
+        company: str,
+        role: str,
+        evidence: list[ScoredEvidence],
+    ) -> InterviewIntelligence:
+        raise SynthesisResponseError(
+            "Gemini returned invalid synthesis output."
+        )
+
+
+def test_research_returns_partial_when_synthesis_response_is_invalid() -> None:
+    invalid_response_app = create_app(
+        research_engine=FakeResearchEngine(),
+        intelligence_synthesizer=InvalidResponseSynthesizer(),
+    )
+
+    with TestClient(invalid_response_app) as client:
+        response = client.post(
+            "/research",
+            json={
+                "company": "Salesforce",
+                "role": "Software Engineer Intern",
+            },
+        )
+
+    assert response.status_code == 200
+
+    payload = response.json()
 
     assert payload["status"] == "partial"
     assert len(payload["evidence"]) == 1

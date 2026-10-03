@@ -18,6 +18,7 @@ from app.services.intelligence_synthesizer import (
     IntelligenceSynthesizer,
 )
 from app.services.research_engine import ResearchEngine
+from app.services.synthesis_errors import SynthesisResponseError
 
 
 router = APIRouter(
@@ -54,7 +55,10 @@ async def research_interview(
             role=request.role,
             evidence=result.evidence,
         )
-    except httpx.HTTPError:
+    except (
+        httpx.HTTPError,
+        SynthesisResponseError,
+    ):
         intelligence = InterviewIntelligence()
         status = "partial"
 
