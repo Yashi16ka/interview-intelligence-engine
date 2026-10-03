@@ -7,6 +7,61 @@ from app.models.source import SourceResult
 from app.services.collectors.base import BaseCollector
 
 
+def is_blocked_or_error_page(
+    title: str,
+    content: str,
+) -> bool:
+    title_text = title.casefold().strip()
+    content_text = content.casefold()
+
+    human_verification_titles = (
+        "just a moment",
+        "verify you are human",
+    )
+    human_verification_content = (
+        "verify you are human",
+        "checking your browser",
+        "performing security verification",
+    )
+
+    if (
+        any(
+            marker in title_text
+            for marker in human_verification_titles
+        )
+        and any(
+            marker in content_text
+            for marker in human_verification_content
+        )
+    ):
+        return True
+
+    access_denied_titles = (
+        "access denied",
+        "forbidden",
+    )
+    access_denied_content = (
+        "access denied",
+        "don't have permission",
+        "do not have permission",
+        "403 forbidden",
+    )
+
+    if (
+        any(
+            marker in title_text
+            for marker in access_denied_titles
+        )
+        and any(
+            marker in content_text
+            for marker in access_denied_content
+        )
+    ):
+        return True
+
+    return False
+
+
 class BrowserPageCollector(BaseCollector):
     def __init__(
         self,
@@ -26,16 +81,28 @@ class BrowserPageCollector(BaseCollector):
         url: str,
     ) -> BrowserFetchResult | None:
         try:
-            await page.goto(
+            response = await page.goto(
                 url,
                 wait_until="domcontentloaded",
                 timeout=self.timeout_ms,
             )
 
+            if (
+                response is not None
+                and response.status >= 400
+            ):
+                return None
+
             title = await page.title()
             content = await page.locator("body").inner_text()
 
             if not title or not content.strip():
+                return None
+
+            if is_blocked_or_error_page(
+                title=title,
+                content=content,
+            ):
                 return None
 
             result = SourceResult(
